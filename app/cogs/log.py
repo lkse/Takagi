@@ -583,24 +583,24 @@ class Logging(commands.Cog):
                     if message.channel_mentions:
                         log_channel = message.channel_mentions[0]
                         guild_id = message.guild.id
-                        # Check if guild exists in the database
-                        query = "SELECT * FROM servers WHERE guild_id = :guild_id"
-                        values = {"guild_id": guild_id}
-                        guild = await database.fetch_one(query, values)
-                        if guild is None:
-                            # Insert new guild into the database
-                            query = "INSERT INTO servers (guild_id, log_channel_id) VALUES (:guild_id, :log_channel_id)"
-                            values = {"guild_id": guild_id, "log_channel_id": log_channel.id}
-                            await database.execute(query, values)
-                        else:
-                            # Update existing guild's log channel
-                            query = "UPDATE servers SET log_channel_id = :log_channel_id WHERE guild_id = :guild_id"
-                            values = {"log_channel_id": log_channel.id, "guild_id": guild_id}
-                            await database.execute(query, values)
-                        await message.channel.send(f"Log channel set to {log_channel.mention}")
+                        query = "SELECT * FROM GUILDS WHERE GID = ?"
+                        resp = await database.fetch_one(query, guild_id)
+                        if not resp:
+                            async with database.transaction() as transaction:
+                                query = "INSERT INTO GUILDS (GID, LogChannel) VALUES (?)"
+                                try:
+                                    await database.execute(query, guild_id, log_channel.id)
+                                except Exception as e:
+                                    await transaction.rollback()
+                                    log.error(f"Guild Creation Error: {e} GID: {guild_id}")
+                                else:
+                                    await transaction.commit()
+                                    log.debug(f"Guild Inserted: {guild_id}")
+                                    await message.channel.send(f"Log channel set to {log_channel.mention}")
                     else:
                         await message.channel.send("Please mention a channel to set as the log channel.")
         
+
 
 
 async def setup(bot):
